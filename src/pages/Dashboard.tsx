@@ -1,19 +1,26 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LogOut, TrendingUp, TrendingDown, Wallet, Plus, Eye, EyeOff } from "lucide-react";
 import TransactionDialog from "@/components/TransactionDialog";
 import TransactionList from "@/components/TransactionList";
+import CategoryManager, { useCategories } from "@/components/CategoryManager";
+import ProfileEditor, { useProfile } from "@/components/ProfileEditor";
 import type { Transaction } from "@/components/TransactionDialog";
+
+type FilterType = "all" | "entrada" | "saida";
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
+  const profile = useProfile();
+  const { categories } = useCategories();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBalance, setShowBalance] = useState(true);
+  const [filter, setFilter] = useState<FilterType>("all");
 
   const fetchTransactions = useCallback(async () => {
     const { data, error } = await supabase
@@ -53,6 +60,11 @@ const Dashboard = () => {
 
   const saldo = totalEntradas - totalSaidas;
 
+  const filteredTransactions = useMemo(() => {
+    if (filter === "all") return transactions;
+    return transactions.filter((t) => t.type === filter);
+  }, [transactions, filter]);
+
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
@@ -66,22 +78,30 @@ const Dashboard = () => {
     setDialogOpen(true);
   };
 
+  const displayName = profile?.name || user?.user_metadata?.name || user?.email?.split("@")[0];
+  const avatarUrl = profile?.avatar_url;
+  const initials = (displayName || "U").slice(0, 2).toUpperCase();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-primary px-4 pb-20 pt-6">
         <div className="mx-auto flex max-w-lg items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-foreground/20">
-              <Wallet className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div>
-              <p className="text-xs text-primary-foreground/70">Olá,</p>
-              <p className="text-sm font-semibold text-primary-foreground">
-                {user?.user_metadata?.name || user?.email?.split("@")[0]}
-              </p>
-            </div>
-          </div>
+          <ProfileEditor>
+            <button className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="h-10 w-10 rounded-full object-cover border-2 border-primary-foreground/20" />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-foreground/20 text-primary-foreground text-sm font-bold">
+                  {initials}
+                </div>
+              )}
+              <div className="text-left">
+                <p className="text-xs text-primary-foreground/70">Olá,</p>
+                <p className="text-sm font-semibold text-primary-foreground">{displayName}</p>
+              </div>
+            </button>
+          </ProfileEditor>
           <Button
             variant="ghost"
             size="icon"
@@ -109,7 +129,7 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Summary cards floating over header */}
+      {/* Summary cards */}
       <div className="mx-auto -mt-12 max-w-lg px-4">
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40">
@@ -141,7 +161,31 @@ const Dashboard = () => {
       <main className="mx-auto max-w-lg px-4 pt-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-foreground">Movimentações</h2>
-          <span className="text-xs text-muted-foreground">{transactions.length} registros</span>
+          <CategoryManager />
+        </div>
+
+        {/* Filters */}
+        <div className="mb-4 flex gap-2">
+          {([
+            { key: "all", label: "Todas" },
+            { key: "entrada", label: "Entradas" },
+            { key: "saida", label: "Saídas" },
+          ] as const).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                filter === key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-muted-foreground self-center">
+            {filteredTransactions.length} registros
+          </span>
         </div>
 
         {loading ? (
@@ -150,7 +194,8 @@ const Dashboard = () => {
           </div>
         ) : (
           <TransactionList
-            transactions={transactions}
+            transactions={filteredTransactions}
+            categories={categories}
             onRefresh={fetchTransactions}
             onEdit={handleEdit}
           />

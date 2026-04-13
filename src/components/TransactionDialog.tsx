@@ -11,13 +11,22 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useCategories } from "@/components/CategoryManager";
 
 export interface Transaction {
   id: string;
   type: "entrada" | "saida";
   amount: number;
   description: string | null;
+  category_id: string | null;
   date: string;
   is_fixed: boolean;
   is_installment: boolean;
@@ -36,9 +45,11 @@ interface TransactionDialogProps {
 const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: TransactionDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { categories } = useCategories();
   const [type, setType] = useState<"entrada" | "saida">("saida");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [categoryId, setCategoryId] = useState<string>("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [isFixed, setIsFixed] = useState(false);
   const [isInstallment, setIsInstallment] = useState(false);
@@ -53,6 +64,7 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
       setType(transaction.type);
       setAmount(String(transaction.amount));
       setDescription(transaction.description || "");
+      setCategoryId(transaction.category_id || "");
       setDate(transaction.date);
       setIsFixed(transaction.is_fixed);
       setIsInstallment(transaction.is_installment);
@@ -62,6 +74,7 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
       setType("saida");
       setAmount("");
       setDescription("");
+      setCategoryId("");
       setDate(new Date().toISOString().split("T")[0]);
       setIsFixed(false);
       setIsInstallment(false);
@@ -79,6 +92,7 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
       type,
       amount: parseFloat(amount),
       description: description || null,
+      category_id: categoryId || null,
       date,
       user_id: user.id,
       is_fixed: isFixed,
@@ -173,6 +187,23 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ex: Salário, Aluguel, Mercado..."
             />
+          </div>
+
+          {/* Category */}
+          <div className="space-y-2">
+            <Label className="text-muted-foreground">Categoria</Label>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione uma categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Date */}
