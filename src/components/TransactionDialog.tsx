@@ -189,6 +189,23 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
             />
           </div>
 
+          {/* Category */}
+          <div className="space-y-2">
+            <Label className="text-muted-foreground">Categoria</Label>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione uma categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Date */}
           <div className="space-y-2">
             <Label className="text-muted-foreground">Data</Label>
