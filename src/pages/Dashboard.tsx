@@ -1,48 +1,38 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LogOut, TrendingUp, TrendingDown, Wallet, Plus } from "lucide-react";
-import TransactionForm from "@/components/TransactionForm";
+import { LogOut, TrendingUp, TrendingDown, Wallet, Plus, Eye, EyeOff } from "lucide-react";
+import TransactionDialog from "@/components/TransactionDialog";
 import TransactionList from "@/components/TransactionList";
-
-interface Transaction {
-  id: string;
-  type: "entrada" | "saida";
-  amount: number;
-  description: string | null;
-  date: string;
-  is_fixed: boolean;
-  is_installment: boolean;
-  installment_total: number | null;
-  installment_current: number | null;
-  created_at: string;
-}
+import type { Transaction } from "@/components/TransactionDialog";
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showBalance, setShowBalance] = useState(true);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     const { data, error } = await supabase
       .from("transactions")
       .select("*")
-      .order("date", { ascending: false });
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
 
     if (!error && data) {
       setTransactions(data as Transaction[]);
     }
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     fetchTransactions();
 
     const channel = supabase
-      .channel("transactions-changes")
+      .channel("transactions-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => {
         fetchTransactions();
       })
@@ -51,7 +41,7 @@ const Dashboard = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [fetchTransactions]);
 
   const totalEntradas = transactions
     .filter((t) => t.type === "entrada")
@@ -66,89 +56,122 @@ const Dashboard = () => {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
+  const handleEdit = (t: Transaction) => {
+    setEditingTransaction(t);
+    setDialogOpen(true);
+  };
+
+  const handleNew = () => {
+    setEditingTransaction(null);
+    setDialogOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border/50 bg-card">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+      <header className="bg-primary px-4 pb-20 pt-6">
+        <div className="mx-auto flex max-w-lg items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-foreground/20">
               <Wallet className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground">FinControl</h1>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
+              <p className="text-xs text-primary-foreground/70">Olá,</p>
+              <p className="text-sm font-semibold text-primary-foreground">
+                {user?.user_metadata?.name || user?.email?.split("@")[0]}
+              </p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={signOut}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={signOut}
+            className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/10"
+          >
             <LogOut className="h-5 w-5" />
           </Button>
         </div>
+
+        {/* Balance */}
+        <div className="mx-auto mt-6 max-w-lg">
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-primary-foreground/70">Saldo total</p>
+            <button
+              onClick={() => setShowBalance(!showBalance)}
+              className="text-primary-foreground/50 hover:text-primary-foreground/80 transition-colors"
+            >
+              {showBalance ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+          <p className="mt-1 text-3xl font-bold text-primary-foreground tabular-nums">
+            {showBalance ? formatCurrency(saldo) : "R$ ••••••"}
+          </p>
+        </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Saldo</CardTitle>
-              <Wallet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <p className={`text-2xl font-bold ${saldo >= 0 ? "text-accent-foreground" : "text-destructive"}`}>
-                {formatCurrency(saldo)}
-              </p>
-            </CardContent>
-          </Card>
+      {/* Summary cards floating over header */}
+      <div className="mx-auto -mt-12 max-w-lg px-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </div>
+              <span className="text-xs text-muted-foreground">Entradas</span>
+            </div>
+            <p className="mt-2 text-lg font-bold text-primary tabular-nums">
+              {showBalance ? formatCurrency(totalEntradas) : "••••"}
+            </p>
+          </div>
+          <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
+                <TrendingDown className="h-4 w-4 text-destructive" />
+              </div>
+              <span className="text-xs text-muted-foreground">Saídas</span>
+            </div>
+            <p className="mt-2 text-lg font-bold text-destructive tabular-nums">
+              {showBalance ? formatCurrency(totalSaidas) : "••••"}
+            </p>
+          </div>
+        </div>
+      </div>
 
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Entradas</CardTitle>
-              <TrendingUp className="h-4 w-4 text-accent-foreground" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-accent-foreground">{formatCurrency(totalEntradas)}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Saídas</CardTitle>
-              <TrendingDown className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-destructive">{formatCurrency(totalSaidas)}</p>
-            </CardContent>
-          </Card>
+      {/* Transactions */}
+      <main className="mx-auto max-w-lg px-4 pt-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-foreground">Movimentações</h2>
+          <span className="text-xs text-muted-foreground">{transactions.length} registros</span>
         </div>
 
-        {/* Add Transaction */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">Transações</h2>
-          <Button onClick={() => setShowForm(!showForm)} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            Nova transação
-          </Button>
-        </div>
-
-        {showForm && (
-          <TransactionForm
-            onSuccess={() => {
-              setShowForm(false);
-              fetchTransactions();
-            }}
-          />
-        )}
-
-        {/* Transaction List */}
         {loading ? (
-          <div className="flex justify-center py-12">
+          <div className="flex justify-center py-16">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           </div>
         ) : (
-          <TransactionList transactions={transactions} onDelete={fetchTransactions} />
+          <TransactionList
+            transactions={transactions}
+            onRefresh={fetchTransactions}
+            onEdit={handleEdit}
+          />
         )}
       </main>
+
+      {/* FAB */}
+      <button
+        onClick={handleNew}
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-xl shadow-primary/30 transition-transform hover:scale-110 active:scale-95"
+      >
+        <Plus className="h-6 w-6 text-primary-foreground" />
+      </button>
+
+      {/* Transaction Dialog */}
+      <TransactionDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        transaction={editingTransaction}
+        onSuccess={fetchTransactions}
+      />
     </div>
   );
 };
