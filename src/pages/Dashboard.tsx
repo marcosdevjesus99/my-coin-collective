@@ -148,10 +148,23 @@ const Dashboard = () => {
           </Button>
         </div>
 
+        {/* Month Navigator */}
+        <div className="mx-auto mt-4 max-w-lg flex items-center justify-center gap-4">
+          <button onClick={goToPrevMonth} className="text-primary-foreground/70 hover:text-primary-foreground transition-colors">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <span className="text-sm font-semibold text-primary-foreground min-w-[140px] text-center">
+            {MONTH_NAMES[selectedMonth]} {selectedYear}
+          </span>
+          <button onClick={goToNextMonth} className="text-primary-foreground/70 hover:text-primary-foreground transition-colors">
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+
         {/* Balance */}
-        <div className="mx-auto mt-6 max-w-lg">
+        <div className="mx-auto mt-4 max-w-lg">
           <div className="flex items-center gap-2">
-            <p className="text-xs text-primary-foreground/70">Saldo total</p>
+            <p className="text-xs text-primary-foreground/70">Saldo do mês</p>
             <button
               onClick={() => setShowBalance(!showBalance)}
               className="text-primary-foreground/50 hover:text-primary-foreground/80 transition-colors"
