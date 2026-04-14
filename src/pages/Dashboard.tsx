@@ -2,7 +2,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { LogOut, TrendingUp, TrendingDown, Wallet, Plus, Eye, EyeOff } from "lucide-react";
+import { LogOut, TrendingUp, TrendingDown, Plus, Eye, EyeOff, ChevronLeft, ChevronRight } from "lucide-react";
 import TransactionDialog from "@/components/TransactionDialog";
 import TransactionList from "@/components/TransactionList";
 import CategoryManager, { useCategories } from "@/components/CategoryManager";
@@ -10,6 +10,11 @@ import ProfileEditor, { useProfile } from "@/components/ProfileEditor";
 import type { Transaction } from "@/components/TransactionDialog";
 
 type FilterType = "all" | "entrada" | "saida";
+
+const MONTH_NAMES = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
@@ -22,10 +27,40 @@ const Dashboard = () => {
   const [showBalance, setShowBalance] = useState(true);
   const [filter, setFilter] = useState<FilterType>("all");
 
+  // Period navigation
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
+  const goToPrevMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear((y) => y - 1);
+    } else {
+      setSelectedMonth((m) => m - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear((y) => y + 1);
+    } else {
+      setSelectedMonth((m) => m + 1);
+    }
+  };
+
+  const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`;
+  const endDate = selectedMonth === 11
+    ? `${selectedYear + 1}-01-01`
+    : `${selectedYear}-${String(selectedMonth + 2).padStart(2, "0")}-01`;
+
   const fetchTransactions = useCallback(async () => {
     const { data, error } = await supabase
       .from("transactions")
       .select("*")
+      .gte("date", startDate)
+      .lt("date", endDate)
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
 
@@ -33,9 +68,10 @@ const Dashboard = () => {
       setTransactions(data as Transaction[]);
     }
     setLoading(false);
-  }, []);
+  }, [startDate, endDate]);
 
   useEffect(() => {
+    setLoading(true);
     fetchTransactions();
 
     const channel = supabase
