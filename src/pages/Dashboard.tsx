@@ -7,17 +7,19 @@ import TransactionDialog from "@/components/TransactionDialog";
 import TransactionList from "@/components/TransactionList";
 import CategoryManager, { useCategories } from "@/components/CategoryManager";
 import ProfileEditor, { useProfile } from "@/components/ProfileEditor";
+import InsightsSection from "@/components/InsightsSection";
+import InvestmentSection from "@/components/InvestmentSection";
+import ThemeToggle from "@/components/ThemeToggle";
+import LanguageToggle from "@/components/LanguageToggle";
+import { useLanguage } from "@/i18n/LanguageContext";
 import type { Transaction } from "@/components/TransactionDialog";
 
 type FilterType = "all" | "entrada" | "saida";
-
-const MONTH_NAMES = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
+type TabType = "transactions" | "insights" | "investments";
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
+  const { t } = useLanguage();
   const profile = useProfile();
   const { categories } = useCategories();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -26,28 +28,21 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showBalance, setShowBalance] = useState(true);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [activeTab, setActiveTab] = useState<TabType>("transactions");
 
-  // Period navigation
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
 
-  const goToPrevMonth = () => {
-    if (selectedMonth === 0) {
-      setSelectedMonth(11);
-      setSelectedYear((y) => y - 1);
-    } else {
-      setSelectedMonth((m) => m - 1);
-    }
-  };
+  const months = t("months") as readonly string[];
 
+  const goToPrevMonth = () => {
+    if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear((y) => y - 1); }
+    else setSelectedMonth((m) => m - 1);
+  };
   const goToNextMonth = () => {
-    if (selectedMonth === 11) {
-      setSelectedMonth(0);
-      setSelectedYear((y) => y + 1);
-    } else {
-      setSelectedMonth((m) => m + 1);
-    }
+    if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear((y) => y + 1); }
+    else setSelectedMonth((m) => m + 1);
   };
 
   const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`;
@@ -63,37 +58,22 @@ const Dashboard = () => {
       .lt("date", endDate)
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
-
-    if (!error && data) {
-      setTransactions(data as Transaction[]);
-    }
+    if (!error && data) setTransactions(data as Transaction[]);
     setLoading(false);
   }, [startDate, endDate]);
 
   useEffect(() => {
     setLoading(true);
     fetchTransactions();
-
     const channel = supabase
       .channel("transactions-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => {
-        fetchTransactions();
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => fetchTransactions())
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [fetchTransactions]);
 
-  const totalEntradas = transactions
-    .filter((t) => t.type === "entrada")
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
-  const totalSaidas = transactions
-    .filter((t) => t.type === "saida")
-    .reduce((sum, t) => sum + Number(t.amount), 0);
-
+  const totalEntradas = transactions.filter((t) => t.type === "entrada").reduce((s, t) => s + Number(t.amount), 0);
+  const totalSaidas = transactions.filter((t) => t.type === "saida").reduce((s, t) => s + Number(t.amount), 0);
   const saldo = totalEntradas - totalSaidas;
 
   const filteredTransactions = useMemo(() => {
@@ -104,15 +84,8 @@ const Dashboard = () => {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
-  const handleEdit = (t: Transaction) => {
-    setEditingTransaction(t);
-    setDialogOpen(true);
-  };
-
-  const handleNew = () => {
-    setEditingTransaction(null);
-    setDialogOpen(true);
-  };
+  const handleEdit = (t: Transaction) => { setEditingTransaction(t); setDialogOpen(true); };
+  const handleNew = () => { setEditingTransaction(null); setDialogOpen(true); };
 
   const displayName = profile?.name || user?.user_metadata?.name || user?.email?.split("@")[0];
   const avatarUrl = profile?.avatar_url;
@@ -120,7 +93,6 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="bg-primary px-4 pb-20 pt-6">
         <div className="mx-auto flex max-w-lg items-center justify-between">
           <ProfileEditor>
@@ -133,42 +105,36 @@ const Dashboard = () => {
                 </div>
               )}
               <div className="text-left">
-                <p className="text-xs text-primary-foreground/70">Olá,</p>
+                <p className="text-xs text-primary-foreground/70">{t("hello") as string},</p>
                 <p className="text-sm font-semibold text-primary-foreground">{displayName}</p>
               </div>
             </button>
           </ProfileEditor>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={signOut}
-            className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/10"
-          >
-            <LogOut className="h-5 w-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <LanguageToggle />
+            <ThemeToggle />
+            <Button variant="ghost" size="icon" onClick={signOut} className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary-foreground/10">
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
 
-        {/* Month Navigator */}
         <div className="mx-auto mt-4 max-w-lg flex items-center justify-center gap-4">
           <button onClick={goToPrevMonth} className="text-primary-foreground/70 hover:text-primary-foreground transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
           <span className="text-sm font-semibold text-primary-foreground min-w-[140px] text-center">
-            {MONTH_NAMES[selectedMonth]} {selectedYear}
+            {months[selectedMonth]} {selectedYear}
           </span>
           <button onClick={goToNextMonth} className="text-primary-foreground/70 hover:text-primary-foreground transition-colors">
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Balance */}
         <div className="mx-auto mt-4 max-w-lg">
           <div className="flex items-center gap-2">
-            <p className="text-xs text-primary-foreground/70">Saldo do mês</p>
-            <button
-              onClick={() => setShowBalance(!showBalance)}
-              className="text-primary-foreground/50 hover:text-primary-foreground/80 transition-colors"
-            >
+            <p className="text-xs text-primary-foreground/70">{t("monthBalance") as string}</p>
+            <button onClick={() => setShowBalance(!showBalance)} className="text-primary-foreground/50 hover:text-primary-foreground/80 transition-colors">
               {showBalance ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
             </button>
           </div>
@@ -181,23 +147,23 @@ const Dashboard = () => {
       {/* Summary cards */}
       <div className="mx-auto -mt-12 max-w-lg px-4">
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40">
+          <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40 animate-fade-in">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                 <TrendingUp className="h-4 w-4 text-primary" />
               </div>
-              <span className="text-xs text-muted-foreground">Entradas</span>
+              <span className="text-xs text-muted-foreground">{t("income") as string}</span>
             </div>
             <p className="mt-2 text-lg font-bold text-primary tabular-nums">
               {showBalance ? formatCurrency(totalEntradas) : "••••"}
             </p>
           </div>
-          <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40">
+          <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40 animate-fade-in">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
                 <TrendingDown className="h-4 w-4 text-destructive" />
               </div>
-              <span className="text-xs text-muted-foreground">Saídas</span>
+              <span className="text-xs text-muted-foreground">{t("expenses") as string}</span>
             </div>
             <p className="mt-2 text-lg font-bold text-destructive tabular-nums">
               {showBalance ? formatCurrency(totalSaidas) : "••••"}
@@ -206,66 +172,92 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Transactions */}
-      <main className="mx-auto max-w-lg px-4 pt-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-foreground">Movimentações</h2>
-          <CategoryManager />
-        </div>
-
-        {/* Filters */}
-        <div className="mb-4 flex gap-2">
+      {/* Tab bar */}
+      <div className="mx-auto max-w-lg px-4 pt-6">
+        <div className="flex gap-1 rounded-xl bg-muted p-1">
           {([
-            { key: "all", label: "Todas" },
-            { key: "entrada", label: "Entradas" },
-            { key: "saida", label: "Saídas" },
-          ] as const).map(({ key, label }) => (
+            { key: "transactions" as TabType, label: t("transactions") as string },
+            { key: "insights" as TabType, label: t("insights") as string },
+            { key: "investments" as TabType, label: t("investments") as string },
+          ]).map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setFilter(key)}
-              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                filter === key
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              onClick={() => setActiveTab(key)}
+              className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                activeTab === key
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {label}
             </button>
           ))}
-          <span className="ml-auto text-xs text-muted-foreground self-center">
-            {filteredTransactions.length} registros
-          </span>
         </div>
+      </div>
 
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          </div>
-        ) : (
-          <TransactionList
-            transactions={filteredTransactions}
+      <main className="mx-auto max-w-lg px-4 pt-4 pb-24">
+        {activeTab === "transactions" && (
+          <>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-foreground">{t("transactions") as string}</h2>
+              <CategoryManager />
+            </div>
+            <div className="mb-4 flex gap-2">
+              {([
+                { key: "all" as FilterType, label: t("all") as string },
+                { key: "entrada" as FilterType, label: t("incomeFilter") as string },
+                { key: "saida" as FilterType, label: t("expenseFilter") as string },
+              ]).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                    filter === key
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <span className="ml-auto text-xs text-muted-foreground self-center">
+                {filteredTransactions.length} {t("records") as string}
+              </span>
+            </div>
+            {loading ? (
+              <div className="flex justify-center py-16">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              </div>
+            ) : (
+              <TransactionList transactions={filteredTransactions} categories={categories} onRefresh={fetchTransactions} onEdit={handleEdit} />
+            )}
+          </>
+        )}
+
+        {activeTab === "insights" && (
+          <InsightsSection
+            transactions={transactions}
             categories={categories}
-            onRefresh={fetchTransactions}
-            onEdit={handleEdit}
+            showBalance={showBalance}
+            formatCurrency={formatCurrency}
           />
+        )}
+
+        {activeTab === "investments" && (
+          <InvestmentSection showBalance={showBalance} formatCurrency={formatCurrency} />
         )}
       </main>
 
-      {/* FAB */}
-      <button
-        onClick={handleNew}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-xl shadow-primary/30 transition-transform hover:scale-110 active:scale-95"
-      >
-        <Plus className="h-6 w-6 text-primary-foreground" />
-      </button>
+      {activeTab === "transactions" && (
+        <button
+          onClick={handleNew}
+          className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-xl shadow-primary/30 transition-transform hover:scale-110 active:scale-95"
+        >
+          <Plus className="h-6 w-6 text-primary-foreground" />
+        </button>
+      )}
 
-      {/* Transaction Dialog */}
-      <TransactionDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        transaction={editingTransaction}
-        onSuccess={fetchTransactions}
-      />
+      <TransactionDialog open={dialogOpen} onOpenChange={setDialogOpen} transaction={editingTransaction} onSuccess={fetchTransactions} />
     </div>
   );
 };
