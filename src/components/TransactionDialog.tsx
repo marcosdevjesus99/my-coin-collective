@@ -109,14 +109,38 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
         .eq("id", transaction.id);
       error = updateError;
     } else {
-      const { error: insertError } = await supabase.from("transactions").insert(payload);
-      error = insertError;
+      // If installment, create all installment entries
+      if (isInstallment && parseInt(installmentTotal) > 1) {
+        const total = parseInt(installmentTotal);
+        const baseDate = new Date(date + "T12:00:00");
+        const installments = [];
+        for (let i = 0; i < total; i++) {
+          const installDate = new Date(baseDate);
+          installDate.setMonth(installDate.getMonth() + i);
+          installments.push({
+            ...payload,
+            date: installDate.toISOString().split("T")[0],
+            installment_current: i + 1,
+            installment_total: total,
+          });
+        }
+        const { error: insertError } = await supabase.from("transactions").insert(installments);
+        error = insertError;
+      } else {
+        const { error: insertError } = await supabase.from("transactions").insert(payload);
+        error = insertError;
+      }
     }
 
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: isEditing ? "Transação atualizada!" : "Transação adicionada!" });
+      toast({
+        title: isEditing ? "Transação atualizada!" : "Transação adicionada!",
+        description: !isEditing && isInstallment && parseInt(installmentTotal) > 1
+          ? `${installmentTotal} parcelas criadas automaticamente`
+          : undefined,
+      });
       onOpenChange(false);
       onSuccess();
     }
