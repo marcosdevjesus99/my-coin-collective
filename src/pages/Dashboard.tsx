@@ -2,13 +2,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { LogOut, TrendingUp, TrendingDown, Plus, Eye, EyeOff, ChevronLeft, ChevronRight } from "lucide-react";
+import { LogOut, TrendingUp, TrendingDown, Plus, Eye, EyeOff, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import TransactionDialog from "@/components/TransactionDialog";
-import TransactionList from "@/components/TransactionList";
+import TransactionList, { TransactionListSkeleton } from "@/components/TransactionList";
 import CategoryManager, { useCategories } from "@/components/CategoryManager";
 import ProfileEditor, { useProfile } from "@/components/ProfileEditor";
 import InsightsSection from "@/components/InsightsSection";
 import InvestmentSection from "@/components/InvestmentSection";
+import IncomeExpenseChart from "@/components/IncomeExpenseChart";
+import FinancialAlerts from "@/components/FinancialAlerts";
 import ThemeToggle from "@/components/ThemeToggle";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLanguage } from "@/i18n/LanguageContext";
@@ -23,6 +32,7 @@ const Dashboard = () => {
   const profile = useProfile();
   const { categories } = useCategories();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [prevMonthTransactions, setPrevMonthTransactions] = useState<Transaction[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,31 +46,48 @@ const Dashboard = () => {
 
   const months = t("months") as readonly string[];
 
-  const goToPrevMonth = () => {
-    if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear((y) => y - 1); }
-    else setSelectedMonth((m) => m - 1);
-  };
-  const goToNextMonth = () => {
-    if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear((y) => y + 1); }
-    else setSelectedMonth((m) => m + 1);
-  };
+  // Build month/year options
+  const monthOptions = useMemo(() => {
+    const options = [];
+    for (let y = now.getFullYear() - 1; y <= now.getFullYear() + 1; y++) {
+      for (let m = 0; m < 12; m++) {
+        options.push({ month: m, year: y, label: `${months[m]} ${y}` });
+      }
+    }
+    return options;
+  }, [months]);
 
   const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}-01`;
   const endDate = selectedMonth === 11
     ? `${selectedYear + 1}-01-01`
     : `${selectedYear}-${String(selectedMonth + 2).padStart(2, "0")}-01`;
 
+  // Previous month dates
+  const prevMonth = selectedMonth === 0 ? 11 : selectedMonth - 1;
+  const prevYear = selectedMonth === 0 ? selectedYear - 1 : selectedYear;
+  const prevStartDate = `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-01`;
+  const prevEndDate = startDate;
+
   const fetchTransactions = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("*")
-      .gte("date", startDate)
-      .lt("date", endDate)
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false });
-    if (!error && data) setTransactions(data as Transaction[]);
+    const [current, previous] = await Promise.all([
+      supabase
+        .from("transactions")
+        .select("*")
+        .gte("date", startDate)
+        .lt("date", endDate)
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("transactions")
+        .select("*")
+        .gte("date", prevStartDate)
+        .lt("date", prevEndDate),
+    ]);
+
+    if (!current.error && current.data) setTransactions(current.data as Transaction[]);
+    if (!previous.error && previous.data) setPrevMonthTransactions(previous.data as Transaction[]);
     setLoading(false);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, prevStartDate, prevEndDate]);
 
   useEffect(() => {
     setLoading(true);
@@ -75,6 +102,12 @@ const Dashboard = () => {
   const totalEntradas = transactions.filter((t) => t.type === "entrada").reduce((s, t) => s + Number(t.amount), 0);
   const totalSaidas = transactions.filter((t) => t.type === "saida").reduce((s, t) => s + Number(t.amount), 0);
   const saldo = totalEntradas - totalSaidas;
+
+  // Previous month balance for variation
+  const prevEntradas = prevMonthTransactions.filter((t) => t.type === "entrada").reduce((s, t) => s + Number(t.amount), 0);
+  const prevSaidas = prevMonthTransactions.filter((t) => t.type === "saida").reduce((s, t) => s + Number(t.amount), 0);
+  const prevSaldo = prevEntradas - prevSaidas;
+  const balanceVariation = prevSaldo !== 0 ? ((saldo - prevSaldo) / Math.abs(prevSaldo)) * 100 : null;
 
   const filteredTransactions = useMemo(() => {
     if (filter === "all") return transactions;
@@ -119,16 +152,27 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="mx-auto mt-4 max-w-lg flex items-center justify-center gap-4">
-          <button onClick={goToPrevMonth} className="text-primary-foreground/70 hover:text-primary-foreground transition-colors">
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-          <span className="text-sm font-semibold text-primary-foreground min-w-[140px] text-center">
-            {months[selectedMonth]} {selectedYear}
-          </span>
-          <button onClick={goToNextMonth} className="text-primary-foreground/70 hover:text-primary-foreground transition-colors">
-            <ChevronRight className="h-5 w-5" />
-          </button>
+        {/* Month dropdown */}
+        <div className="mx-auto mt-4 max-w-lg flex items-center justify-center">
+          <Select
+            value={`${selectedMonth}-${selectedYear}`}
+            onValueChange={(val) => {
+              const [m, y] = val.split("-").map(Number);
+              setSelectedMonth(m);
+              setSelectedYear(y);
+            }}
+          >
+            <SelectTrigger className="w-[200px] bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground text-sm font-semibold justify-center">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map((opt) => (
+                <SelectItem key={`${opt.month}-${opt.year}`} value={`${opt.month}-${opt.year}`}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="mx-auto mt-4 max-w-lg">
@@ -141,29 +185,34 @@ const Dashboard = () => {
           <p className="mt-1 text-3xl font-bold text-primary-foreground tabular-nums">
             {showBalance ? formatCurrency(saldo) : "R$ ••••••"}
           </p>
+          {showBalance && balanceVariation !== null && (
+            <p className={`mt-1 text-xs font-semibold ${balanceVariation >= 0 ? "text-green-300" : "text-red-300"}`}>
+              {balanceVariation >= 0 ? "↑" : "↓"} {Math.abs(balanceVariation).toFixed(1)}% {t("balanceVariation") as string}
+            </p>
+          )}
         </div>
       </header>
 
       {/* Summary cards */}
       <div className="mx-auto -mt-12 max-w-lg px-4">
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40 animate-fade-in">
+          <div className="rounded-2xl bg-card p-4 shadow-lg border border-border/40 animate-fade-in">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
                 <TrendingUp className="h-4 w-4 text-primary" />
               </div>
-              <span className="text-xs text-muted-foreground">{t("income") as string}</span>
+              <span className="text-xs text-muted-foreground font-medium">{t("income") as string}</span>
             </div>
             <p className="mt-2 text-lg font-bold text-primary tabular-nums">
               {showBalance ? formatCurrency(totalEntradas) : "••••"}
             </p>
           </div>
-          <div className="rounded-xl bg-card p-4 shadow-lg border border-border/40 animate-fade-in">
+          <div className="rounded-2xl bg-card p-4 shadow-lg border border-border/40 animate-fade-in">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-destructive/10">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10">
                 <TrendingDown className="h-4 w-4 text-destructive" />
               </div>
-              <span className="text-xs text-muted-foreground">{t("expenses") as string}</span>
+              <span className="text-xs text-muted-foreground font-medium">{t("expenses") as string}</span>
             </div>
             <p className="mt-2 text-lg font-bold text-destructive tabular-nums">
               {showBalance ? formatCurrency(totalSaidas) : "••••"}
@@ -172,9 +221,19 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* Financial alerts */}
+      <div className="mx-auto max-w-lg px-4 pt-4">
+        <FinancialAlerts
+          transactions={transactions}
+          categories={categories}
+          totalEntradas={totalEntradas}
+          totalSaidas={totalSaidas}
+        />
+      </div>
+
       {/* Tab bar */}
-      <div className="mx-auto max-w-lg px-4 pt-6">
-        <div className="flex gap-1 rounded-xl bg-muted p-1">
+      <div className="mx-auto max-w-lg px-4 pt-5">
+        <div className="flex gap-1 rounded-2xl bg-muted p-1">
           {([
             { key: "transactions" as TabType, label: t("transactions") as string },
             { key: "insights" as TabType, label: t("insights") as string },
@@ -183,7 +242,7 @@ const Dashboard = () => {
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+              className={`flex-1 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all duration-200 ${
                 activeTab === key
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -199,9 +258,18 @@ const Dashboard = () => {
         {activeTab === "transactions" && (
           <>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-foreground">{t("transactions") as string}</h2>
+              <h2 className="text-base font-bold text-foreground">{t("transactions") as string}</h2>
               <CategoryManager />
             </div>
+
+            {/* Income vs Expense chart */}
+            <IncomeExpenseChart
+              totalEntradas={totalEntradas}
+              totalSaidas={totalSaidas}
+              showBalance={showBalance}
+              formatCurrency={formatCurrency}
+            />
+
             <div className="mb-4 flex gap-2">
               {([
                 { key: "all" as FilterType, label: t("all") as string },
@@ -211,7 +279,7 @@ const Dashboard = () => {
                 <button
                   key={key}
                   onClick={() => setFilter(key)}
-                  className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                  className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all duration-200 ${
                     filter === key
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -220,16 +288,20 @@ const Dashboard = () => {
                   {label}
                 </button>
               ))}
-              <span className="ml-auto text-xs text-muted-foreground self-center">
+              <span className="ml-auto text-xs text-muted-foreground self-center tabular-nums">
                 {filteredTransactions.length} {t("records") as string}
               </span>
             </div>
             {loading ? (
-              <div className="flex justify-center py-16">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              </div>
+              <TransactionListSkeleton />
             ) : (
-              <TransactionList transactions={filteredTransactions} categories={categories} onRefresh={fetchTransactions} onEdit={handleEdit} />
+              <TransactionList
+                transactions={filteredTransactions}
+                categories={categories}
+                onRefresh={fetchTransactions}
+                onEdit={handleEdit}
+                userName={displayName || undefined}
+              />
             )}
           </>
         )}
@@ -251,7 +323,7 @@ const Dashboard = () => {
       {activeTab === "transactions" && (
         <button
           onClick={handleNew}
-          className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-xl shadow-primary/30 transition-transform hover:scale-110 active:scale-95"
+          className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-xl shadow-primary/30 transition-all duration-200 hover:scale-110 hover:shadow-2xl active:scale-95"
         >
           <Plus className="h-6 w-6 text-primary-foreground" />
         </button>
