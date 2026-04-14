@@ -19,6 +19,9 @@ export const translations = {
     all: "Todas",
     incomeFilter: "Entradas",
     expenseFilter: "Saídas",
+    balanceVariation: "vs mês anterior",
+    noTransactions: "Nenhuma transação",
+    addHint: "Toque no botão + para adicionar",
 
     // Transaction Dialog
     newTransaction: "Nova transação",
@@ -48,6 +51,7 @@ export const translations = {
     topCategory: "Maior gasto",
     expensesByCategory: "Gastos por categoria",
     noData: "Sem dados neste mês",
+    incomeVsExpenses: "Entradas vs Saídas",
 
     // Investments
     investments: "Investimentos",
@@ -69,10 +73,25 @@ export const translations = {
     editProfile: "Editar perfil",
     name: "Nome",
     avatarUrl: "URL do avatar",
+    myProfile: "Meu Perfil",
+    yourName: "Seu nome",
+    photoUrl: "URL da foto",
+    saveProfile: "Salvar perfil",
+    profileUpdated: "Perfil atualizado!",
 
     // Dark mode
     darkMode: "Modo escuro",
     lightMode: "Modo claro",
+
+    // Alerts
+    alertCategoryDominant: "Você está gastando muito com",
+    alertOverspending: "Seus gastos estão maiores que sua renda",
+    alertUnusualExpense: "Este gasto está acima do seu padrão",
+    alertIncomeConsumed: "Você já consumiu {percent}% da sua renda",
+    alertTitle: "Alerta financeiro",
+
+    // Transaction user
+    by: "por",
 
     // Months
     months: [
@@ -98,6 +117,9 @@ export const translations = {
     all: "All",
     incomeFilter: "Income",
     expenseFilter: "Expenses",
+    balanceVariation: "vs last month",
+    noTransactions: "No transactions",
+    addHint: "Tap the + button to add",
 
     newTransaction: "New transaction",
     editTransaction: "Edit transaction",
@@ -125,6 +147,7 @@ export const translations = {
     topCategory: "Top expense",
     expensesByCategory: "Expenses by category",
     noData: "No data this month",
+    incomeVsExpenses: "Income vs Expenses",
 
     investments: "Investments",
     newInvestment: "New contribution",
@@ -143,9 +166,22 @@ export const translations = {
     editProfile: "Edit profile",
     name: "Name",
     avatarUrl: "Avatar URL",
+    myProfile: "My Profile",
+    yourName: "Your name",
+    photoUrl: "Photo URL",
+    saveProfile: "Save profile",
+    profileUpdated: "Profile updated!",
 
     darkMode: "Dark mode",
     lightMode: "Light mode",
+
+    alertCategoryDominant: "You're spending too much on",
+    alertOverspending: "Your expenses exceed your income",
+    alertUnusualExpense: "This expense is above your average",
+    alertIncomeConsumed: "You've already consumed {percent}% of your income",
+    alertTitle: "Financial alert",
+
+    by: "by",
 
     months: [
       "January", "February", "March", "April", "May", "June",
