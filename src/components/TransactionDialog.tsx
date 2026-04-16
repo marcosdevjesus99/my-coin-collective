@@ -21,6 +21,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useCategories } from "@/components/CategoryManager";
 import { useGroupMembers } from "@/hooks/useGroupMembers";
+import type { TablesInsert } from "@/integrations/supabase/types";
+
+type TransactionInsert = TablesInsert<"transactions">;
 
 export interface Transaction {
   id: string;
@@ -93,13 +96,12 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
     }
   }, [transaction, open, user]);
 
-  const buildFixedSeries = (basePayload: Record<string, unknown>, baseDate: string) => {
+  const buildFixedSeries = (basePayload: TransactionInsert, baseDate: string): TransactionInsert[] => {
     const base = new Date(baseDate + "T12:00:00");
-    const entries: Record<string, unknown>[] = [];
+    const entries: TransactionInsert[] = [];
     for (let i = 0; i < FIXED_MONTHS_AHEAD; i++) {
       const d = new Date(base);
       d.setMonth(d.getMonth() + i);
-      // Clamp day to 28 to avoid month overflow (Feb, etc.)
       const day = Math.min(base.getDate(), 28);
       d.setDate(day);
       entries.push({
