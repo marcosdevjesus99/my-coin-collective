@@ -76,15 +76,15 @@ const FinancialAlerts = ({ transactions, categories, totalEntradas, totalSaidas 
       {visible.map((alert) => (
         <div
           key={alert.id}
-          className="flex items-start gap-3 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-3"
+          className="flex items-start gap-3 rounded-2xl border border-yellow-400 bg-yellow-100 p-3 shadow-sm transition-all hover:brightness-95 dark:border-yellow-500/30 dark:bg-yellow-500/10"
         >
-          <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-500 mt-0.5" />
-          <p className="flex-1 text-xs font-medium text-yellow-200">{alert.message}</p>
+          <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-600 mt-0.5 dark:text-yellow-500" />
+          <p className="flex-1 text-xs font-semibold text-yellow-900 dark:text-yellow-200">{alert.message}</p>
           <button
             onClick={() => setDismissed((s) => new Set(s).add(alert.id))}
-            className="shrink-0 text-yellow-500/60 hover:text-yellow-500 transition-colors"
+            className="shrink-0 text-yellow-700 hover:text-yellow-900 transition-colors dark:text-yellow-500/60 dark:hover:text-yellow-500"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
       ))}
