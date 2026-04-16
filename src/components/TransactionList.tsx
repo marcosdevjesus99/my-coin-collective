@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Trash2, ArrowUpRight, ArrowDownRight, Pencil, RotateCcw, Tag, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { useGroupMembers } from "@/hooks/useGroupMembers";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Transaction } from "@/components/TransactionDialog";
 import type { Category } from "@/components/CategoryManager";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +20,8 @@ interface TransactionListProps {
 const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName }: TransactionListProps) => {
   const { toast } = useToast();
   const { t } = useLanguage();
+  const { getName } = useGroupMembers();
+  const { user } = useAuth();
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("transactions").delete().eq("id", id);
@@ -88,6 +92,9 @@ const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName
             <div className="space-y-2">
               {items.map((t) => {
                 const catName = getCategoryName(t.category_id);
+                const ownerName = t.user_id
+                  ? (t.user_id === user?.id ? (userName || getName(t.user_id)) : getName(t.user_id)) || userName
+                  : userName;
                 return (
                   <div
                     key={t.id}
@@ -114,9 +121,9 @@ const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName
                         {t.description || (t.type === "entrada" ? "Entrada" : "Saída")}
                       </p>
                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                        {userName && (
+                        {ownerName && (
                           <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                            <User className="h-2.5 w-2.5" /> {userName}
+                            <User className="h-2.5 w-2.5" /> {t("by") as string} {ownerName}
                           </span>
                         )}
                         {catName && (
