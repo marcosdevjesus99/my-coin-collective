@@ -18,6 +18,7 @@ import InsightsSection from "@/components/InsightsSection";
 import InvestmentSection from "@/components/InvestmentSection";
 import IncomeExpenseChart from "@/components/IncomeExpenseChart";
 import FinancialAlerts from "@/components/FinancialAlerts";
+import UserSpendingChart from "@/components/UserSpendingChart";
 import ThemeToggle from "@/components/ThemeToggle";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useLanguage } from "@/i18n/LanguageContext";
@@ -307,12 +308,19 @@ const Dashboard = () => {
         )}
 
         {activeTab === "insights" && (
-          <InsightsSection
-            transactions={transactions}
-            categories={categories}
-            showBalance={showBalance}
-            formatCurrency={formatCurrency}
-          />
+          <div className="space-y-4">
+            <InsightsSection
+              transactions={transactions}
+              categories={categories}
+              showBalance={showBalance}
+              formatCurrency={formatCurrency}
+            />
+            <UserSpendingChart
+              transactions={transactions}
+              showBalance={showBalance}
+              formatCurrency={formatCurrency}
+            />
+          </div>
         )}
 
         {activeTab === "investments" && (

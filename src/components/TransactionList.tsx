@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Trash2, ArrowUpRight, ArrowDownRight, Pencil, RotateCcw, Tag, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { useGroupMembers } from "@/hooks/useGroupMembers";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Transaction } from "@/components/TransactionDialog";
 import type { Category } from "@/components/CategoryManager";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +20,8 @@ interface TransactionListProps {
 const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName }: TransactionListProps) => {
   const { toast } = useToast();
   const { t } = useLanguage();
+  const { getName } = useGroupMembers();
+  const { user } = useAuth();
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("transactions").delete().eq("id", id);
@@ -86,22 +90,25 @@ const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName
               </span>
             </div>
             <div className="space-y-2">
-              {items.map((t) => {
-                const catName = getCategoryName(t.category_id);
+              {items.map((tr) => {
+                const catName = getCategoryName(tr.category_id);
+                const ownerName = tr.user_id
+                  ? (tr.user_id === user?.id ? (userName || getName(tr.user_id)) : getName(tr.user_id)) || userName
+                  : userName;
                 return (
                   <div
-                    key={t.id}
+                    key={tr.id}
                     className="group flex items-center gap-3 rounded-2xl bg-card p-3.5 shadow-sm transition-all duration-200 hover:shadow-md hover:scale-[1.01] border border-border/40"
                   >
                     {/* Icon */}
                     <div
                       className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors ${
-                        t.type === "entrada"
+                        tr.type === "entrada"
                           ? "bg-primary/10"
                           : "bg-destructive/10"
                       }`}
                     >
-                      {t.type === "entrada" ? (
+                      {tr.type === "entrada" ? (
                         <ArrowUpRight className="h-5 w-5 text-primary" />
                       ) : (
                         <ArrowDownRight className="h-5 w-5 text-destructive" />
@@ -111,12 +118,12 @@ const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-semibold text-foreground">
-                        {t.description || (t.type === "entrada" ? "Entrada" : "Saída")}
+                        {tr.description || (tr.type === "entrada" ? "Entrada" : "Saída")}
                       </p>
                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                        {userName && (
+                        {ownerName && (
                           <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                            <User className="h-2.5 w-2.5" /> {userName}
+                            <User className="h-2.5 w-2.5" /> {t("by") as string} {ownerName}
                           </span>
                         )}
                         {catName && (
@@ -124,14 +131,14 @@ const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName
                             <Tag className="h-2.5 w-2.5" /> {catName}
                           </span>
                         )}
-                        {t.is_fixed && (
+                        {tr.is_fixed && (
                           <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
                             <RotateCcw className="h-2.5 w-2.5" /> Fixa
                           </span>
                         )}
-                        {t.is_installment && t.installment_current && t.installment_total && (
+                        {tr.is_installment && tr.installment_current && tr.installment_total && (
                           <span className="text-[10px] font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
-                            {t.installment_current}/{t.installment_total}x
+                            {tr.installment_current}/{tr.installment_total}x
                           </span>
                         )}
                       </div>
@@ -141,17 +148,17 @@ const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName
                     <div className="flex items-center gap-1.5">
                       <p
                         className={`text-sm font-bold tabular-nums ${
-                          t.type === "entrada" ? "text-primary" : "text-destructive"
+                          tr.type === "entrada" ? "text-primary" : "text-destructive"
                         }`}
                       >
-                        {t.type === "entrada" ? "+" : "-"}{formatCurrency(Number(t.amount))}
+                        {tr.type === "entrada" ? "+" : "-"}{formatCurrency(Number(tr.amount))}
                       </p>
                       <div className="flex opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 hover:bg-muted"
-                          onClick={() => onEdit(t)}
+                          onClick={() => onEdit(tr)}
                         >
                           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                         </Button>
@@ -159,7 +166,7 @@ const TransactionList = ({ transactions, categories, onRefresh, onEdit, userName
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 hover:bg-destructive/10"
-                          onClick={() => handleDelete(t.id)}
+                          onClick={() => handleDelete(tr.id)}
                         >
                           <Trash2 className="h-3.5 w-3.5 text-destructive/70" />
                         </Button>

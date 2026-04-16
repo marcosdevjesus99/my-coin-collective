@@ -20,6 +20,10 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useCategories } from "@/components/CategoryManager";
+import { useGroupMembers } from "@/hooks/useGroupMembers";
+import type { TablesInsert } from "@/integrations/supabase/types";
+
+type TransactionInsert = TablesInsert<"transactions">;
 
 export interface Transaction {
   id: string;
@@ -32,6 +36,7 @@ export interface Transaction {
   is_installment: boolean;
   installment_total: number | null;
   installment_current: number | null;
+  user_id?: string;
   created_at: string;
 }
 
@@ -42,10 +47,15 @@ interface TransactionDialogProps {
   onSuccess: () => void;
 }
 
+// How many months to project FIXED recurring transactions into the future
+const FIXED_MONTHS_AHEAD = 12;
+
 const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: TransactionDialogProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { categories } = useCategories();
+  const { members } = useGroupMembers();
+
   const [type, setType] = useState<"entrada" | "saida">("saida");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -55,6 +65,7 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
   const [isInstallment, setIsInstallment] = useState(false);
   const [installmentTotal, setInstallmentTotal] = useState("");
   const [installmentCurrent, setInstallmentCurrent] = useState("");
+  const [responsibleId, setResponsibleId] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
   const isEditing = !!transaction;
@@ -70,6 +81,7 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
       setIsInstallment(transaction.is_installment);
       setInstallmentTotal(String(transaction.installment_total || ""));
       setInstallmentCurrent(String(transaction.installment_current || ""));
+      setResponsibleId(transaction.user_id || user?.id || "");
     } else {
       setType("saida");
       setAmount("");
@@ -80,56 +92,87 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
       setIsInstallment(false);
       setInstallmentTotal("");
       setInstallmentCurrent("");
+      setResponsibleId(user?.id || "");
     }
-  }, [transaction, open]);
+  }, [transaction, open, user]);
+
+  const buildFixedSeries = (basePayload: TransactionInsert, baseDate: string): TransactionInsert[] => {
+    const base = new Date(baseDate + "T12:00:00");
+    const entries: TransactionInsert[] = [];
+    for (let i = 0; i < FIXED_MONTHS_AHEAD; i++) {
+      const d = new Date(base);
+      d.setMonth(d.getMonth() + i);
+      const day = Math.min(base.getDate(), 28);
+      d.setDate(day);
+      entries.push({
+        ...basePayload,
+        date: d.toISOString().split("T")[0],
+        is_fixed: true,
+        is_installment: false,
+        installment_total: 0,
+        installment_current: 0,
+      });
+    }
+    return entries;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setLoading(true);
 
-    const payload = {
+    const ownerId = responsibleId || user.id;
+
+    const basePayload = {
       type,
       amount: parseFloat(amount),
       description: description || null,
       category_id: categoryId || null,
       date,
-      user_id: user.id,
+      user_id: ownerId,
       is_fixed: isFixed,
       is_installment: isInstallment,
       installment_total: isInstallment ? parseInt(installmentTotal) || 0 : 0,
       installment_current: isInstallment ? parseInt(installmentCurrent) || 0 : 0,
     };
 
-    let error;
-    if (isEditing) {
+    let error: { message: string } | null = null;
+    let createdCount = 0;
+
+    if (isEditing && transaction) {
       const { error: updateError } = await supabase
         .from("transactions")
-        .update(payload)
+        .update(basePayload)
         .eq("id", transaction.id);
       error = updateError;
-    } else {
-      // If installment, create all installment entries
-      if (isInstallment && parseInt(installmentTotal) > 1) {
-        const total = parseInt(installmentTotal);
-        const baseDate = new Date(date + "T12:00:00");
-        const installments = [];
-        for (let i = 0; i < total; i++) {
-          const installDate = new Date(baseDate);
-          installDate.setMonth(installDate.getMonth() + i);
-          installments.push({
-            ...payload,
-            date: installDate.toISOString().split("T")[0],
-            installment_current: i + 1,
-            installment_total: total,
-          });
-        }
-        const { error: insertError } = await supabase.from("transactions").insert(installments);
-        error = insertError;
-      } else {
-        const { error: insertError } = await supabase.from("transactions").insert(payload);
-        error = insertError;
+    } else if (isFixed) {
+      // FIXED RECURRING: create N months ahead
+      const series = buildFixedSeries(basePayload, date);
+      const { error: insertError } = await supabase.from("transactions").insert(series);
+      error = insertError;
+      createdCount = series.length;
+    } else if (isInstallment && parseInt(installmentTotal) > 1) {
+      // INSTALLMENT: create N parcelas
+      const total = parseInt(installmentTotal);
+      const baseDate = new Date(date + "T12:00:00");
+      const installments = [];
+      for (let i = 0; i < total; i++) {
+        const installDate = new Date(baseDate);
+        installDate.setMonth(installDate.getMonth() + i);
+        installments.push({
+          ...basePayload,
+          date: installDate.toISOString().split("T")[0],
+          installment_current: i + 1,
+          installment_total: total,
+        });
       }
+      const { error: insertError } = await supabase.from("transactions").insert(installments);
+      error = insertError;
+      createdCount = installments.length;
+    } else {
+      const { error: insertError } = await supabase.from("transactions").insert(basePayload);
+      error = insertError;
+      createdCount = 1;
     }
 
     if (error) {
@@ -137,8 +180,10 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
     } else {
       toast({
         title: isEditing ? "Transação atualizada!" : "Transação adicionada!",
-        description: !isEditing && isInstallment && parseInt(installmentTotal) > 1
-          ? `${installmentTotal} parcelas criadas automaticamente`
+        description: !isEditing && createdCount > 1
+          ? isFixed
+            ? `${createdCount} meses agendados automaticamente`
+            : `${createdCount} parcelas criadas automaticamente`
           : undefined,
       });
       onOpenChange(false);
@@ -149,7 +194,7 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-foreground">
             {isEditing ? "Editar transação" : "Nova transação"}
@@ -210,6 +255,7 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ex: Salário, Aluguel, Mercado..."
+              maxLength={120}
             />
           </div>
 
@@ -230,6 +276,25 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
             </Select>
           </div>
 
+          {/* Responsible */}
+          {members.length > 1 && (
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">Responsável</Label>
+              <Select value={responsibleId} onValueChange={setResponsibleId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Quem fez o lançamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map((m) => (
+                    <SelectItem key={m.user_id} value={m.user_id}>
+                      {m.name || "Usuário"}{m.user_id === user?.id ? " (você)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Date */}
           <div className="space-y-2">
             <Label className="text-muted-foreground">Data</Label>
@@ -247,7 +312,10 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
               <input
                 type="checkbox"
                 checked={isFixed}
-                onChange={(e) => setIsFixed(e.target.checked)}
+                onChange={(e) => {
+                  setIsFixed(e.target.checked);
+                  if (e.target.checked) setIsInstallment(false);
+                }}
                 className="rounded border-border"
               />
               Fixa / Recorrente
@@ -256,12 +324,21 @@ const TransactionDialog = ({ open, onOpenChange, transaction, onSuccess }: Trans
               <input
                 type="checkbox"
                 checked={isInstallment}
-                onChange={(e) => setIsInstallment(e.target.checked)}
+                onChange={(e) => {
+                  setIsInstallment(e.target.checked);
+                  if (e.target.checked) setIsFixed(false);
+                }}
                 className="rounded border-border"
               />
               Parcelada
             </label>
           </div>
+
+          {isFixed && !isEditing && (
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+              💡 Será criada automaticamente nos próximos {FIXED_MONTHS_AHEAD} meses.
+            </p>
+          )}
 
           {isInstallment && (
             <div className="grid grid-cols-2 gap-3">

@@ -92,6 +92,8 @@ export const translations = {
 
     // Transaction user
     by: "por",
+    responsible: "Responsável",
+    spendingByUser: "Gastos por usuário",
 
     // Months
     months: [
@@ -182,6 +184,8 @@ export const translations = {
     alertTitle: "Financial alert",
 
     by: "by",
+    responsible: "Responsible",
+    spendingByUser: "Spending by user",
 
     months: [
       "January", "February", "March", "April", "May", "June",
