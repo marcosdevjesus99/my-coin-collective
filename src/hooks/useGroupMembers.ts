@@ -42,7 +42,7 @@ export const useGroupMembers = () => {
     load();
 
     const channel = supabase
-      .channel("profiles-realtime")
+      .channel(`profiles-realtime-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "profiles" },
