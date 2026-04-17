@@ -6,12 +6,13 @@ Aplicativo moderno de controle financeiro compartilhado, com foco em simplicidad
 🚀 Demonstração
 
 🔗 Acesse o app:
-https://seu-app.vercel.app
+
 
 👤 Usuário de teste:
 
 Email: teste@demo.com  
 Senha: 123456
+
 📸 Preview
 
 (adicione prints do app aqui — dashboard, insights, etc.)
